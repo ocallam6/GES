@@ -53,11 +53,11 @@ class Spectrum:
         try:
             par=fits.open("GES_iDR6_WG15_Recommended_with_sflags__mode_normal_091221.fits")
             for i in range (0,len(par[1].data)):
-                if str(self.object.split())==par[1].data[i][0].split():
+                if str(self.object)==par[1].data[i][0]:
                     return par[1].data[i]
-                else:
-                    print('returning nan for parameters as no match of names')
-                    return np.NaN
+                
+            print('returning nan for parameters as no match of names')
+            return np.NaN
 
 
 
