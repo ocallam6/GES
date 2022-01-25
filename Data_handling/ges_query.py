@@ -10,7 +10,7 @@ def table_query_names(giraffe_setting):
     eso.login("ocallam6")
 
 
-    eso.ROW_LIMIT=200000000000000000
+    eso.ROW_LIMIT=10000000000000000000000000000000000000000000000000
     print('Query begin')
     table = eso.query_surveys('GAIAESO', cache=False)
     print('Length of table queried: '+str(table))
