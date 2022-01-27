@@ -18,10 +18,10 @@ import numpy as np
 
 class Spectrum:
     #---- Constructor
-    def __init__(self,spectrum_file_name,parameters=True):
+    def __init__(self,spectrum_file_name,par_file,parameters=True):
         self.object, self.data=self.get_data_and_name(file=spectrum_file_name)
         if(parameters==True):
-            self.parameters=self.get_parameters(name=self.object)
+            self.parameters=self.get_parameters(name=self.object,par=par_file)
         else:
             self.parameters=np.NaN
 
@@ -32,7 +32,7 @@ class Spectrum:
             try:
                 os.chdir("../Data")
             except:
-                os.chdir("Data")
+                os.chdir("../../Data")
         spectrum=fits.open(file)
         name=spectrum[1].header['OBJECT']
         wlength=spectrum[1].data[0][0]
@@ -44,17 +44,11 @@ class Spectrum:
 
         return name, data
 
-    def get_parameters(self,name): #could maybe do a try except here in case in GES
-        if('Parameter_files' not in os.getcwd()):
-            try:
-                os.chdir("../Parameter_files")
-            except:
-                os.chdir("Parameter_files")
+    def get_parameters(self,name,par): #could maybe do a try except here in case in GES)
         try:
-            par=fits.open("GES_iDR6_WG15_Recommended_with_sflags__mode_normal_091221.fits")
-            for i in range (0,len(par[1].data)):
-                if str(self.object)==par[1].data[i][0]:
-                    return par[1].data[i]
+            for i in range (0,len(par)):
+                if str(self.object)==par[i][0]:
+                    return par[i]
                 
             print('returning nan for parameters as no match of names')
             return np.NaN
