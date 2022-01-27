@@ -15,6 +15,26 @@ from os import listdir
 from os.path import isfile, join
 import numpy as np
 
+'''    need to be in data folder   '''
+def get_data(file):
+    try:
+        file=file[:3]+'3'+file[3:]+'s'
+        spectrum=fits.open(file)
+        #name=spectrum[1].header['OBJECT']
+        wlength=spectrum[1].data[0][0]
+        flux=spectrum[1].data[0][1]
+        flux_err=spectrum[1].data[0][2]
+
+        data=pd.DataFrame(data= np.array([wlength,flux,flux_err]).transpose(),
+            columns=['wavelength','flux','flux_err'])
+
+        return data
+
+    except:
+        return np.NAN
+
+'''
+original code, redundant now
 
 class Spectrum:
     #---- Constructor
@@ -88,3 +108,4 @@ def learning_data(spectrum_list,parameters):
     flux=pd.DataFrame(data=np.array(learning_spectra),columns=columns)
     teff=pd.DataFrame(data=np.array(parameter_lists).transpose(),columns=parameters)
     return pd.concat([flux,teff],axis=1)
+'''

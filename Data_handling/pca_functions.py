@@ -36,16 +36,17 @@ class Pca_Fitting:
     
     def mse_comparison_plot(self,components):
         fitted_pca=list()
-        for i in range(1,components):
-            
-            pca=sklearn.decomposition.PCA(n_components=i)
 
-            spec_fitted=pca.fit_transform(self.learning_spectra)
-            pca_product=np.matmul(spec_fitted,pca.components_)            
-            fitted_pca.append(pca.mean_+pca_product)  
-            mse_tensor=[]
+        
+        pca=sklearn.decomposition.PCA(n_components=components)
+
+        spec_fitted=pca.fit_transform(self.learning_spectra)
+
+        mse_tensor=[]
         for i in range(0,np.shape(fitted_pca)[0]):
-            mse_tensor.append((np.square(self.learning_spectra-fitted_pca[i]).mean(axis=1)))
+            pca_product=np.matmul(spec_fitted[:,0:i+1],pca.components_[0:i+1])            
+            fitted_pca=pca.mean_+pca_product
+            mse_tensor.append((np.square(self.learning_spectra-fitted_pca).mean(axis=1)))
         mse_tensor=np.array(mse_tensor).transpose()
         mse_average=mse_tensor.mean(axis=0)
 
@@ -62,10 +63,10 @@ class Pca_Fitting:
 
 
         axs[0,1].plot(self.learning_spectra[100],label='orig')
-        axs[0,1].plot(fitted_pca[0][100]+0.03,label='1')
-        axs[0,1].plot(fitted_pca[10][100]+0.06,label='11')
-        axs[0,1].plot(fitted_pca[20][100]+0.09, label='21')
-        axs[0,1].plot(fitted_pca[28][100]+0.12,label='29')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:0+1],pca.components_[0:0+1]))[100]+0.03,label='1')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:10+1],pca.components_[0:0+1]))[100]+0.06,label='11')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:20+1],pca.components_[0:0+1]))+0.09, label='21')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:28+1],pca.components_[0:0+1]))[100]+0.12,label='29')
         axs[0,1].legend()
         axs[0,1].set_title('Spectrum reconstructed from different number of PCA components')
         axs[1,0].plot(pca.explained_variance_ratio_)
