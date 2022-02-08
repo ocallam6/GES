@@ -14,7 +14,7 @@ class Encoder(nn.Module): #guide function q(z given x)
     def __init__(self, input_dim, z_dim, hidden_dim):
         super(Encoder,self).__init__()
         
-        self.fc1 = nn.Linear(input_dim, hidden_dim) 
+        self.fc1 = nn.Linear(input_dim, hidden_dim) #changed from linear
         self.fc21 = nn.Linear(hidden_dim, z_dim)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
 
@@ -26,6 +26,7 @@ class Encoder(nn.Module): #guide function q(z given x)
         #x = x.reshape(-1, self.lambdas)
         
         hidden=self.softplus(self.fc1(x))
+        
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
         z_loc = self.fc21(hidden)
@@ -41,8 +42,11 @@ class Decoder(nn.Module): #likelihood function p(x given z)
         super(Decoder,self).__init__()
 
         #fully connected layers
+        #self.fc1=nn.Linear(z_dim,hidden_dim)
+        #self.fc21=nn.Linear(hidden_dim,output_dim)   #the length of an individual spectrum
+
         self.fc1=nn.Linear(z_dim,hidden_dim)
-        self.fc21=nn.Linear(hidden_dim,output_dim)   #the length of an individual spectrum
+        self.fc21=nn.Linear(hidden_dim,output_dim)
 
         #activation functions
         self.softplus=nn.Softplus()
@@ -64,7 +68,7 @@ class VAE(nn.Module):
         self.Decoder = Decoder
     
     def reparameterization(self,mean,var):
-        epsilon=torch.randn_like(var)
+        epsilon=torch.randn_like(var) #is this the right way of doing it
         z=mean+var*epsilon 
         return z 
 
@@ -111,3 +115,7 @@ def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
         print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))
         
     print("Finish!!")
+
+
+def print_f():
+    print('yes')

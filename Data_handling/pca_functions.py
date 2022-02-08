@@ -64,9 +64,9 @@ class Pca_Fitting:
 
         axs[0,1].plot(self.learning_spectra[100],label='orig')
         axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:0+1],pca.components_[0:0+1]))[100]+0.03,label='1')
-        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:10+1],pca.components_[0:0+1]))[100]+0.06,label='11')
-        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:20+1],pca.components_[0:0+1]))+0.09, label='21')
-        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:28+1],pca.components_[0:0+1]))[100]+0.12,label='29')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:10+1],pca.components_[0:10+1]))[100]+0.06,label='11')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:20+1],pca.components_[0:20+1]))+0.09, label='21')
+        axs[0,1].plot((pca.mean_+np.matmul(spec_fitted[:,0:28+1],pca.components_[0:30+1]))[100]+0.12,label='29')
         axs[0,1].legend()
         axs[0,1].set_title('Spectrum reconstructed from different number of PCA components')
         axs[1,0].plot(pca.explained_variance_ratio_)

@@ -34,8 +34,8 @@ def gaia_cone(right_as_center,dec_center,diam):    #input is the center of the c
     return gaia_edr3
     
 def bailer_jones_cone(right_as_center,dec_center,diam):  
-    coord = SkyCoord(right_as_center,dec_center, unit=(u.hourangle, u.deg))
-    rad = u.Quantity(diam, u.arcminute)  #scanning radius, it is twice the diameter of the 
+    coord = SkyCoord(right_as_center,dec_center, unit=(u.deg, u.deg))
+    rad = u.Quantity(diam, u.deg)  #scanning radius, it is twice the diameter of the 
     r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=True) 
     #Next we want the bailer-jones values for the same region, unlimited row limits now
     Vizier.ROW_LIMIT = -1
