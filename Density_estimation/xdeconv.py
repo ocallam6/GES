@@ -8,6 +8,7 @@ Arbitrary mixing matrices R are not yet implemented: currently, this only
 works with R = I.
 """
 from time import time
+from matplotlib.pyplot import axes
 
 import numpy as np
 from scipy import linalg
@@ -15,6 +16,7 @@ try:  # SciPy >= 0.19
     from scipy.special import logsumexp as logsumexp
 except ImportError:
     from scipy.misc import logsumexp as logsumexp
+
 
 from sklearn.base import BaseEstimator
 from sklearn.mixture import GaussianMixture
@@ -54,7 +56,7 @@ class XDGMM(BaseEstimator):
         self.alpha = None
 
 
-    def fit(self, X, Xerr, R=None):
+    def fit(self, X, Xerr, R):
         """Fit the XD model to data
 
         Parameters
@@ -68,8 +70,6 @@ class XDGMM(BaseEstimator):
             Transformation matrix from underlying to observed data.  If
             unspecified, then it is assumed to be the identity matrix.
         """
-        if R is not None:
-            raise NotImplementedError("mixing matrix R is not yet implemented")
 
         X = np.asarray(X)
         Xerr = np.asarray(Xerr)
@@ -87,12 +87,12 @@ class XDGMM(BaseEstimator):
         self.alpha = gmm.weights_
         self.V = gmm.covariances_
 
-        logL = self.logL(X, Xerr)
+        logL = self.logL(X, Xerr,R)
 
         for i in range(self.max_iter):
             t0 = time()
-            self._EMstep(X, Xerr)
-            logL_next = self.logL(X, Xerr)
+            self._EMstep(X, Xerr,R)
+            logL_next = self.logL(X, Xerr,R)
             t1 = time()
 
             if self.verbose:
@@ -105,7 +105,7 @@ class XDGMM(BaseEstimator):
 
         return self
 
-    def logprob_a(self, X, Xerr):
+    def logprob_a(self, X, Xerr,R):
         """
         Evaluate the probability for a set of points
 
@@ -124,25 +124,33 @@ class XDGMM(BaseEstimator):
         X = np.asarray(X)
         Xerr = np.asarray(Xerr)
         n_samples, n_features = X.shape
-
         # assume full covariances of data
         assert Xerr.shape == (n_samples, n_features, n_features)
+
         X = X[:, np.newaxis, :]
-        Xerr = Xerr[:, np.newaxis, :, :]
-        T = Xerr + self.V
-        '''   X = X[:, np.newaxis, :]
+
+
+
         Xerr = Xerr[:, np.newaxis, :, :]
         R=R[:,np.newaxis,:,:]
 
-        RXerrR=R[:]*Xerr[:]*R[:].transpose()
-        Rmu=R[:]*self.mu[:]
+ 
+        #so the log_multivariate gaussian requires that the mean has just n_component vectors in it
+        RVRt=np.matmul(np.matmul(R[:],self.V[:]),R.transpose(0,1,3,2)[:])   #we dont do transpose as all of our matrices are diagonal
+        
 
-        T = RXerrR+ self.V
+        Rmu=np.matmul(R,self.mu[np.newaxis,:,:,np.newaxis])
+        #Rmu=R[:]*self.mu[np.newaxis,:,:,np.newaxis]
 
-        return log_multivariate_gaussian(X, Rmu, T) + np.log(self.alpha)'''
-        return log_multivariate_gaussian(X, self.mu, T) + np.log(self.alpha)
 
-    def logL(self, X, Xerr):
+        T = RVRt+ Xerr
+        
+
+
+
+        return log_multivariate_gaussian(X, Rmu.reshape(Rmu.shape[0:3]), T) + np.log(self.alpha)
+
+    def logL(self, X, Xerr,R):
         """Compute the log-likelihood of data given the model
 
         Parameters
@@ -157,23 +165,35 @@ class XDGMM(BaseEstimator):
         logL : float
             log-likelihood
         """
-        return np.sum(logsumexp(self.logprob_a(X, Xerr), -1))
+        # we need to run through all the different R values
+        return np.sum(logsumexp(self.logprob_a(X, Xerr,R), -1))
 
-    def _EMstep(self, X, Xerr):
+    def _EMstep(self, X, Xerr,R):
         """
         Perform the E-step (eq 16 of Bovy et al)
         """
+
+
         n_samples, n_features = X.shape
+
 
         X = X[:, np.newaxis, :]
         Xerr = Xerr[:, np.newaxis, :, :]
+        R=R[:,np.newaxis,:,:]
 
-        w_m = X - self.mu
+        RVRt=np.matmul(np.matmul(R[:],self.V[:]),R.transpose(0,1,3,2)[:])   #we dont do transpose as all of our matrices are diagonal
+        
+        Rmu=np.matmul(R,self.mu[np.newaxis,:,:,np.newaxis])
 
-        T = Xerr + self.V
+        T = RVRt+ Xerr
+
+
+        w_m = X - Rmu.reshape(Rmu.shape[0:3])
+
 
         # ------------------------------------------------------------
         #  compute inverse of each covariance matrix T
+        
         Tshape = T.shape
         T = T.reshape([n_samples * self.n_components,
                         n_features, n_features])
@@ -183,20 +203,34 @@ class XDGMM(BaseEstimator):
 
         # ------------------------------------------------------------
         #  evaluate each mixture at each point
-        N = np.exp(log_multivariate_gaussian(X, self.mu, T, Vinv=Tinv))
+        N = np.exp(log_multivariate_gaussian(X, Rmu.reshape(Rmu.shape[0:3]), T, Vinv=Tinv))
 
         # ------------------------------------------------------------
         #  E-step:
         #   compute q_ij, b_ij, and B_ij
         q = (N * self.alpha) / np.dot(N, self.alpha)[:, None]
 
-        tmp = np.sum(Tinv * w_m[:, :, np.newaxis, :], -1)
-        b = self.mu + np.sum(self.V * tmp[:, :, np.newaxis, :], -1)
 
-        tmp = np.sum(Tinv[:, :, :, :, np.newaxis]
-                        * self.V[:, np.newaxis, :, :], -2)
-        B = self.V - np.sum(self.V[:, :, :, np.newaxis]
-                            * tmp[:, :, np.newaxis, :, :], -2)
+
+        tmp = np.sum(np.matmul(Tinv , w_m[:, :, :,np.newaxis]), -1)  #sum just gets rid of that dummy axis, is essentially a reshape function
+        
+        
+        
+        
+        b = self.mu + np.sum(np.matmul(np.matmul(self.V,R.transpose(0,1,3,2)) , tmp[:, :, :,np.newaxis]), -1)  #might have a newaxis problem here3
+
+
+
+
+        tmp = np.matmul(np.matmul(np.matmul(R.transpose(0,1,3,2),Tinv[:, :, :, :]),R)
+                        , self.V[:, :, :])     #again could have a newaxis problem here
+
+
+
+                        
+        B = self.V - np.matmul(self.V[:, :, :]
+                            , tmp[:, :, :])
+
 
         # ------------------------------------------------------------
         #  M-step:
