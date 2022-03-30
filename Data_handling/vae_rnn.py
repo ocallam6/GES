@@ -11,10 +11,17 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Encoder(nn.Module): #guide function q(z given x)
-    def __init__(self, input_dim, z_dim, hidden_dim):
+    def __init__(self, input_dim, z_dim, hidden_dim,layer_dim):
         super(Encoder,self).__init__()
+        print('rnn')
+        self.hidden_dim=hidden_dim
+        self.input_size=input_dim
+        self.layer_dim=layer_dim
+        self.rnn = nn.RNN(input_size=input_dim, hidden_size=hidden_dim,batch_first=True,num_layers=layer_dim) #changed from linear #bidirectional
+
+
+
         
-        self.fc1 = nn.Linear(input_dim, hidden_dim) #changed from linear
         self.fc21 = nn.Linear(hidden_dim, z_dim)
         self.fc22 = nn.Linear(hidden_dim, z_dim)
 
@@ -24,8 +31,11 @@ class Encoder(nn.Module): #guide function q(z given x)
         #spectrum -->splits--> two fc -->
         # i might have to reshape so that the input is right dmesnion
         #x = x.reshape(-1, self.lambdas)
+        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).requires_grad_()
         
-        hidden=self.softplus(self.fc1(x))
+        out, h0 = self.rnn(x, h0.detach())
+
+        hidden=out[:,-1,:]
         
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
@@ -97,15 +107,18 @@ def loss_function(x, x_hat, mean, log_var):
 def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
     for epoch in range(epochs):
         overall_loss = 0
+        
         for batch_idx, x in enumerate(vae_spec):
-
-            x = x.view(batch_size, len(x[0]))
+            x=  x.view(batch_size, -1, len(x[0]))
+            #x = x.view(batch_size, len(x[0]))
             x = x.to(DEVICE)
 
             optimizer.zero_grad()
 
             x_hat, mean, log_var = model(x)
-            loss = loss_function(x, x_hat, mean, log_var)
+
+
+            loss = loss_function(x.reshape(x_hat.shape), x_hat, mean, log_var)
             
             overall_loss += loss.item()
             
@@ -115,36 +128,7 @@ def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
         print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))
         
     print("Finish!!")
-    print(mean)
-    print(log_var)
 
-
-def model_train_cm(vae_spec,batch_size,optimizer,model,loss_function,epochs,target):
-    for epoch in range(epochs):
-        overall_loss = 0
-        for batch_idx, x in enumerate(vae_spec):
-            
-            x = x.view(batch_size, len(x[0]))
-            x = x.to(DEVICE)
-
-            target = target.view(batch_size, len(x[0]))
-            target = target.to(DEVICE)
-
-            optimizer.zero_grad()
-
-            x_hat, mean, log_var = model(x)
-            loss = loss_function(target, x_hat, mean, log_var)
-            
-            overall_loss += loss.item()
-            
-            loss.backward()
-            optimizer.step()
-            
-        print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))
-        
-    print("Finish!!")
-    print(mean)
-    print(log_var)
 
 def print_f():
     print('yes')
