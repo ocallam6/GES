@@ -22,7 +22,7 @@ def gaia_cone(right_as_center,dec_center,diam):    #input is the center of the c
 
     coord = SkyCoord(right_as_center,dec_center, unit=(u.deg, u.deg))
     rad = u.Quantity(diam, u.deg)  #scanning radius, it is twice the diameter of the 
-    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=True)   #This is the cone search radius
+    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=False)   #This is the cone search radius
     
     #Gaia Query
     gaia_edr3=r.get_results()   #etting the tables from server
