@@ -1,96 +1,104 @@
 import os
-
 import numpy as np
 import torch
-
 import torch.nn as nn
-
 from torch.nn import functional as F
-
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+'''
+The encoder is the density function q_φ(z|x) which is trying to estimate the 
+p_θ(z|x)
+We are using factorised Gaussian Posteriors model, where we have
+that q_φ(z|x)=N(z|mu,diag(sigma^2))
+
+repar we get
+epsilon ~ N(o,I)
+(mu,log sigma)=NN_φ(x)
+z=mu+sigma x epsilon
+'''
 
 
 class Encoder(nn.Module): #guide function q(z given x)
     def __init__(self, input_dim, z_dim, hidden_dims,dropout):
         super(Encoder,self).__init__()
         
-        self.fc1 = nn.Linear(input_dim, hidden_dims[0])
-        self.fc11=nn.Linear(hidden_dims[0],hidden_dims[1]) #changed from linear
-        self.fc21 = nn.Linear(hidden_dims[1], z_dim)
-        self.fc22 = nn.Linear(hidden_dims[1], z_dim)
-        self.d = nn.Dropout(p=dropout)
-
+        self.hidden1 = nn.Linear(input_dim, hidden_dims[0])
+        self.hidden2=nn.Linear(hidden_dims[0],hidden_dims[1]) #changed from linear
+        self.nn_mu = nn.Linear(hidden_dims[1], z_dim)
+        self.nn_log_sigma = nn.Linear(hidden_dims[1], z_dim)
+        self.dropout = nn.Dropout(p=dropout)
+        self.tanh=nn.Tanh()
         self.relu=nn.ReLU()
         self.softplus=nn.Softplus()
-         
+
+    def reparameterization(self,mean,sigma):
+        epsilon=torch.randn_like(sigma) #is this the right way of doing it
+        z=mean+sigma*epsilon 
+        return z 
+
     def forward(self,x):
+        hidden_layer1=self.dropout(self.tanh(self.hidden1(x)))
+        hidden_layer2=self.dropout(self.tanh(self.hidden2(hidden_layer1)))
 
-        layer1=self.d(self.relu(self.fc1(x)))
+        z_mu = self.nn_mu(hidden_layer2)
+        z_log_sigma = self.nn_log_sigma(hidden_layer2) 
 
-        layer2=self.d(self.relu(self.fc11(layer1)))
+        z=self.reparameterization(z_mu,torch.exp(z_log_sigma))
 
-        
-        # then return a mean vector and a (positive) square root covariance
-        # each of size batch_size x z_dim
-        enc=layer2
-        z_loc = self.fc21(layer2)
-        z_scale = self.fc22(layer2) 
-        return z_loc, z_scale, enc
+        return z, z_mu, z_log_sigma
 
+'''
+The decoder is the disctribution p_θ(x|z) which uses the value of the latent variables generated from the encoders and we want to see how
+different this will be.
+
+'''
 
 class Decoder(nn.Module): #likelihood function p(x given z)
     def __init__(self,z_dim, hidden_dims, output_dim,dropout):
         super(Decoder,self).__init__()
+        self.hidden1 = nn.Linear(z_dim, hidden_dims[0])
+        self.hidden2=nn.Linear(hidden_dims[0],hidden_dims[1]) #changed from linear
+        self.nn_out = nn.Linear(hidden_dims[1], output_dim)
 
-        self.fc1=nn.Linear(z_dim,hidden_dims[1])
-        self.fc11=nn.Linear(hidden_dims[1],hidden_dims[0])
-        self.fc21=nn.Linear(hidden_dims[0],output_dim)
-        self.d = nn.Dropout(p=dropout)
-        #activation functions
-        self.softplus=nn.Softplus()
-        self.sigmoid=nn.Sigmoid()
+        self.dropout = nn.Dropout(p=dropout)
+
+
+        self.tanh=nn.Tanh()
         self.relu=nn.ReLU()
+        self.softplus=nn.Softplus()
     def forward(self,z):
-        layer1=self.d(self.relu(self.fc1(z)))
-        layer2=self.d(self.relu(self.fc11(layer1))) # z --> nn fully connected --> softplus activation --> hidden
-        x_recon=self.fc21(layer2)  #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
+        layer1=self.dropout(self.tanh(self.hidden1(z)))
+        layer2=self.dropout((self.hidden2(layer1))) # z --> nn fully connected --> softplus activation --> hidden
+        x_recon=self.nn_out(layer2)  #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
         return x_recon
 
-'''For continuous latent variables and a differentiable encoder and genera- tive model,
- the ELBO can be straightforwardly differentiated w.r.t. 
-both φ and θ through a change of variables, also called the reparameterization trick (Kingma and Welling, 2014 and Rezende et al., 2014).'''
+#Define the VAE now.
 
 class VAE(nn.Module):
     def __init__(self, Encoder, Decoder):
         super(VAE,self).__init__()
         self.Encoder = Encoder
         self.Decoder = Decoder
-    
-    def reparameterization(self,mean,var):
-        epsilon=torch.randn_like(var) #is this the right way of doing it
-        z=mean+var*epsilon 
-        return z 
+
 
     def forward(self,x):
-        mean,log_var,enc=self.Encoder(x)
-        z=self.reparameterization(mean, torch.exp(0.5*log_var))
+        z,mean,log_var=self.Encoder(x)
         x_recon=self.Decoder(z)
-        return x_recon, mean, log_var, z ,enc
+        return x_recon, mean, log_var, z
 
+'''
 
+When doing the loss do we need our batch do be big enough so that taking the mean approximates the expectation
 
-
-
-
-
+'''
 
 
 BCE_loss = nn.BCELoss()
 
 def loss_function(x, x_hat, mean, log_var):
-    reproduction_loss = ((x - x_hat)**2).sum()   #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
+    reproduction_loss = torch.sum(0.5*(x-x_hat)**2)  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
-    kldweight=1.0
+    kldweight=0.5
     return reproduction_loss + KLD*kldweight
 
 def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
@@ -103,7 +111,7 @@ def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
 
             optimizer.zero_grad()
 
-            x_hat, mean, log_var, z, enc = model(x)
+            x_hat, mean, log_var, z = model(x)
             loss = loss_function(x, x_hat, mean, log_var)
             
             overall_loss += loss.item()
