@@ -38,12 +38,12 @@ class Encoder(nn.Module): #guide function q(z given x)
 
     def forward(self,x):
         hidden_layer1=self.dropout(self.tanh(self.hidden1(x)))
-        hidden_layer2=self.dropout(self.tanh(self.hidden2(hidden_layer1)))
+        hidden_layer2=self.dropout((self.hidden2(hidden_layer1)))
 
         z_mu = self.nn_mu(hidden_layer2)
-        z_log_sigma = self.nn_log_sigma(hidden_layer2) 
+        z_log_sigma = self.softplus(self.nn_log_sigma(hidden_layer2))
 
-        z=self.reparameterization(z_mu,torch.exp(z_log_sigma))
+        z=self.reparameterization(z_mu,torch.exp(0.5*z_log_sigma))
 
         return z, z_mu, z_log_sigma
 
@@ -67,8 +67,8 @@ class Decoder(nn.Module): #likelihood function p(x given z)
         self.relu=nn.ReLU()
         self.softplus=nn.Softplus()
     def forward(self,z):
-        layer1=self.dropout(self.tanh(self.hidden1(z)))
-        layer2=self.dropout((self.hidden2(layer1))) # z --> nn fully connected --> softplus activation --> hidden
+        layer1=self.dropout((self.hidden1(z)))
+        layer2=self.dropout(self.tanh(self.hidden2(layer1))) # z --> nn fully connected --> softplus activation --> hidden
         x_recon=self.nn_out(layer2)  #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
         return x_recon
 
@@ -98,7 +98,7 @@ BCE_loss = nn.BCELoss()
 def loss_function(x, x_hat, mean, log_var):
     reproduction_loss = torch.sum(0.5*(x-x_hat)**2)  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
-    kldweight=0.5
+    kldweight=0.001
     return reproduction_loss + KLD*kldweight
 
 def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
