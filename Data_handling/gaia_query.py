@@ -22,7 +22,7 @@ def gaia_cone(right_as_center,dec_center,diam):    #input is the center of the c
 
     coord = SkyCoord(right_as_center,dec_center, unit=(u.deg, u.deg))
     rad = u.Quantity(diam, u.deg)  #scanning radius, it is twice the diameter of the 
-    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=True)   #This is the cone search radius
+    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=False)   #This is the cone search radius
     
     #Gaia Query
     gaia_edr3=r.get_results()   #etting the tables from server
@@ -36,7 +36,7 @@ def gaia_cone(right_as_center,dec_center,diam):    #input is the center of the c
 def bailer_jones_cone(right_as_center,dec_center,diam):  
     coord = SkyCoord(right_as_center,dec_center, unit=(u.deg, u.deg))
     rad = u.Quantity(diam, u.deg)  #scanning radius, it is twice the diameter of the 
-    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=True) 
+    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=False) 
     #Next we want the bailer-jones values for the same region, unlimited row limits now
     Vizier.ROW_LIMIT = -1
     bailer = Vizier.query_region(coord,
@@ -44,26 +44,29 @@ def bailer_jones_cone(right_as_center,dec_center,diam):
                                  catalog='I/352/gedr3dis')[0]                            
     bailer=bailer[np.argsort(bailer['Source'])] #making sure match in concat
     bailer=bailer.to_pandas()
+    
     return bailer.reset_index()
 
-def concatenate_gaia_bailer(gaia_data,bailer_data):    
+def concatenate_gaia_bailer(right_as_center,dec_center,diam):    
 
-    print(len(gaia_data),' and ',len(bailer_data))
-    
+    coord = SkyCoord(right_as_center,dec_center, unit=(u.deg, u.deg))
+    rad = u.Quantity(diam, u.deg)  #scanning radius, it is twice the diameter of the 
+    r = Gaia.cone_search_async(coordinate=coord, radius=rad, verbose=False) 
+    gaia_edr3=r.get_results()   #etting the tables from server
+    gaia_edr3=gaia_edr3[np.argsort(gaia_edr3['source_id'])]
+    gaia_edr3 = gaia_edr3.to_pandas()
+    #Gets rid of unmeasured parallax
+    print('warning, getting rid of very negaitve parallax')
+    gaia_edr3=gaia_edr3[gaia_edr3['parallax']>=-1000]
+    Vizier.ROW_LIMIT = -1
+    bailer = Vizier.query_region(coord,
+                                 radius=rad,
+                                 catalog='I/352/gedr3dis')[0]                            
+    bailer=bailer[np.argsort(bailer['Source'])] #making sure match in concat
+    bailer=bailer.to_pandas()
+    bailer['source_id']=bailer['Source']
 
-    ###Boolean variables
-    bool1=(False in (gaia_data['source_id'].values==bailer_data['Source'].values))
-    bool2=(len(gaia_data)==len(bailer_data))
-    bool3=bool2 and (not bool1)
- 
-    #Should have more error messages and break this up more
-
-    if(bool3): #making sure it all matches
-        
-        total_gaia = pd.concat([gaia_data,bailer_data], axis=1, join="inner")
-        return total_gaia
-    else:
-        print('error in sizes')
+    return pd.DataFrame.merge(gaia_edr3,bailer,on='source_id')
 
 
         

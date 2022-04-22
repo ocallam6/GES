@@ -7,6 +7,7 @@ http://arxiv.org/pdf/0905.2979v2.pdf
 Arbitrary mixing matrices R are not yet implemented: currently, this only
 works with R = I.
 """
+from queue import Empty
 from time import time
 from matplotlib.pyplot import axes
 
@@ -17,6 +18,7 @@ try:  # SciPy >= 0.19
 except ImportError:
     from scipy.misc import logsumexp as logsumexp
 
+from scipy.stats import multivariate_normal
 
 from sklearn.base import BaseEstimator
 from sklearn.mixture import GaussianMixture
@@ -80,13 +82,15 @@ class XDGMM(BaseEstimator):
 
         # initialize components via a few steps of GaussianMixture              #do an initial guess on the full data
         # this doesn't take into account errors, but is a fast first-guess
-        gmm = GaussianMixture(self.n_components, max_iter=10,
+        print('gmm')
+        gmm = GaussianMixture(self.n_components, max_iter=100,
                                 covariance_type='full',
                                 random_state=self.random_state).fit(X)
+        print('endgmm')
         self.mu = gmm.means_
         self.alpha = gmm.weights_
         self.V = gmm.covariances_
-
+        
         logL = self.logL(X, Xerr,R)
 
         for i in range(self.max_iter):
@@ -247,6 +251,7 @@ class XDGMM(BaseEstimator):
         tmp *= q[:, :, np.newaxis, np.newaxis]
         self.V = tmp.sum(0) / qj[:, np.newaxis, np.newaxis]
 
+
     def sample(self, size=1, random_state=None):
         if random_state is None:
             random_state = self.random_state
@@ -269,3 +274,46 @@ class XDGMM(BaseEstimator):
                             for i in range(len(self.alpha))])
 
         return draw.reshape(shape)
+    
+    def prob_z_given_w(self, X,Xerr,R):
+        
+        X = np.asarray(X)
+        Xerr = np.asarray(Xerr)
+        n_samples, n_features = X.shape
+        # assume full covariances of data
+        assert Xerr.shape == (n_samples, n_features, n_features)
+
+        X = X[:, np.newaxis, :]
+
+
+
+        Xerr = Xerr[:, np.newaxis, :, :]
+        R=R[:,np.newaxis,:,:]
+        
+        RVRt=np.matmul(np.matmul(R[:],self.V[:]),R.transpose(0,1,3,2)[:])   #we dont do transpose as all of our matrices are diagonal
+        
+        Rmu=np.matmul(R,self.mu[np.newaxis,:,:,np.newaxis])
+        Rmu=Rmu.reshape(Rmu.shape[0:3])
+
+        T = RVRt+ Xerr
+
+        Tshape = T.shape
+        T = T.reshape([n_samples * self.n_components,
+                        n_features, n_features])
+        Tinv = np.array([linalg.inv(T[i])
+                            for i in range(T.shape[0])]).reshape(Tshape)
+        T = T.reshape(Tshape)
+
+
+        output=[]
+        components=np.array([[0.0]*self.n_components]*len(X)).transpose()
+
+        for j in range(0,len(X)):
+            sum=0
+            for i in range(0,self.n_components):
+                components[i,j]=self.alpha[i]*multivariate_normal.pdf(X[j],Rmu[j,i,:],T[j,i,:,:])
+                sum=sum+self.alpha[i]*multivariate_normal.pdf(X[j],Rmu[j,i,:],T[j,i,:,:])
+            components[:,j]=components[:,j]/sum
+        return components.transpose()
+
+

@@ -6,6 +6,7 @@ eso = Eso()
 
 #-------This function simply gets te names of objects from the Gaia ESO surevey------#
 
+
 def table_query_names(giraffe_setting):
     eso.login("ocallam6")
 
