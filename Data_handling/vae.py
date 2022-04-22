@@ -37,8 +37,8 @@ class Encoder(nn.Module): #guide function q(z given x)
         return z 
 
     def forward(self,x):
-        hidden_layer1=self.dropout(self.tanh(self.hidden1(x)))
-        hidden_layer2=self.dropout((self.hidden2(hidden_layer1)))
+        hidden_layer1=(self.relu(self.hidden1(x)))
+        hidden_layer2=(self.relu(self.hidden2(hidden_layer1)))
 
         z_mu = self.nn_mu(hidden_layer2)
         z_log_sigma = self.softplus(self.nn_log_sigma(hidden_layer2))
@@ -65,11 +65,11 @@ class Decoder(nn.Module): #likelihood function p(x given z)
 
         self.tanh=nn.Tanh()
         self.relu=nn.ReLU()
-        self.softplus=nn.Softplus()
+        self.sigmoid=nn.Sigmoid()
     def forward(self,z):
-        layer1=self.dropout((self.hidden1(z)))
-        layer2=self.dropout(self.tanh(self.hidden2(layer1))) # z --> nn fully connected --> softplus activation --> hidden
-        x_recon=self.nn_out(layer2)  #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
+        layer1=(self.relu(self.hidden1(z)))
+        layer2=(self.relu(self.hidden2(layer1))) # z --> nn fully connected --> softplus activation --> hidden
+        x_recon=self.sigmoid(self.nn_out(layer2))  #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
         return x_recon
 
 #Define the VAE now.
@@ -96,31 +96,39 @@ When doing the loss do we need our batch do be big enough so that taking the mea
 BCE_loss = nn.BCELoss()
 
 def loss_function(x, x_hat, mean, log_var):
-    reproduction_loss = torch.sum(0.5*(x-x_hat)**2)  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
+    reproduction_loss = nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
-    kldweight=0.001
-    return reproduction_loss + KLD*kldweight
+    kldweight=0.1
+    return reproduction_loss + KLD*kldweight, KLD
 
 def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
+    z_an=[]
+    kld=[] #this is done for analysis of posterior collapse
     for epoch in range(epochs):
+        
         overall_loss = 0
         for batch_idx, x in enumerate(vae_spec):
 
             x = x.view(batch_size, len(x[0]))
-            x = x.to(DEVICE)
+            #x = x.to(DEVICE)
 
             optimizer.zero_grad()
 
             x_hat, mean, log_var, z = model(x)
-            loss = loss_function(x, x_hat, mean, log_var)
+            loss, KLD = loss_function(x, x_hat, mean, log_var)
             
             overall_loss += loss.item()
             
             loss.backward()
             optimizer.step()
-        
+        z_an.append(z)   
+        kld.append(KLD) 
+                
         print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))
         print("Overall Loss: ", overall_loss)
+        print("KLD Loss: ", KLD)
     print("Finish!!")
+    return z_an,kld
+
 
 

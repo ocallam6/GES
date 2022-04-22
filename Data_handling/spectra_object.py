@@ -15,7 +15,9 @@ from os import listdir
 from os.path import isfile, join
 import numpy as np
 
-'''    need to be in data folder   '''
+'''    THIS FILE IS VERY SPECIFIC TO THE FORMAT THAT HAS BEEN DOWNLOADED AND DOESNT HAVE MUCH USE 
+ANYWEHRE ELSE  '''
+
 def get_data(file):
     try:
         file=file[:3]+'3'+file[3:]+'s'
@@ -32,80 +34,3 @@ def get_data(file):
 
     except:
         return np.NAN
-
-'''
-original code, redundant now
-
-class Spectrum:
-    #---- Constructor
-    def __init__(self,spectrum_file_name,par_file,parameters=True):
-        self.object, self.data=self.get_data_and_name(file=spectrum_file_name)
-        if(parameters==True):
-            self.parameters=self.get_parameters(name=self.object,par=par_file)
-        else:
-            self.parameters=np.NaN
-
-
-
-    def get_data_and_name(self,file):
-        if('Data' not in os.getcwd()):
-            try:
-                os.chdir("../Data")
-            except:
-                os.chdir("../../Data")
-        spectrum=fits.open(file)
-        name=spectrum[1].header['OBJECT']
-        wlength=spectrum[1].data[0][0]
-        flux=spectrum[1].data[0][1]
-        flux_err=spectrum[1].data[0][2]
-
-        data=pd.DataFrame(data= np.array([wlength,flux,flux_err]).transpose(),
-            columns=['wavelength','flux','flux_err'])
-
-        return name, data
-
-    def get_parameters(self,name,par): #could maybe do a try except here in case in GES)
-        try:
-            for i in range (0,len(par)):
-                if str(self.object)==par[i][0]:
-                    return par[i]
-                
-            print('returning nan for parameters as no match of names')
-            return np.NaN
-
-
-
-        except:
-            print("returning NAN for parameter data")
-            return np.NAN
-
-    def get_object(self):
-        return self.object
-    def get_columns(self):
-        return self.data.columns
-
-
-
-
-def learning_data(spectrum_list,parameters):
-    columns=list(spectrum_list[0].data['wavelength'].astype(str))
-    
-    learning_spectra=[]
-    parameter_lists=[]
-    for name in parameters:
-        parameter_array=[]    
-        for i in range(0,len(spectrum_list)):
-            if(name==parameters[0]):
-                learning_spectra.append(spectrum_list[i].data['flux'])
-            
-            try:    
-                parameter_array.append(spectrum_list[i].parameters[name].values[0])
-            except:
-                parameter_array.append(np.NaN)  
-        parameter_lists.append(parameter_array)
-
-
-    flux=pd.DataFrame(data=np.array(learning_spectra),columns=columns)
-    teff=pd.DataFrame(data=np.array(parameter_lists).transpose(),columns=parameters)
-    return pd.concat([flux,teff],axis=1)
-'''

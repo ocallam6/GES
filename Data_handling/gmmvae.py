@@ -17,6 +17,8 @@ repar we get
 epsilon ~ N(o,I)
 (mu,log sigma)=NN_φ(x)
 z=mu+sigma x epsilon
+
+# Need to work on this further
 '''
 
 
