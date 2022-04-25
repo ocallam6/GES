@@ -20,40 +20,44 @@ class FlowGMM(nn.Module):
         self.d=d
         self.prior=GaussianMixture(n_components=mixture_components,n_features=self.n_features)
 
-        self.st_net=nn.Sequential(
+        self.st_net=nn.ModuleList([nn.Sequential(
             nn.Linear(self.d,hidden_dims[0]),
             nn.ReLU(),
             nn.Linear(hidden_dims[0],hidden_dims[1]),
             nn.ReLU(),
             nn.Linear(hidden_dims[1],2*(self.n_features-self.d)) #d is the dimension of 1:d vector, 
-                            )
+                            ) for i in range(layers)])
 
     def forward(self,x):
         s_loss=torch.empty_like(x[:,self.d:])
         for i in range(self.layers):
+            
             if(i%2==0):
                 x1,x2=x[:,:self.d],x[:,self.d:]
             else:
                 x1,x2=x[:,-self.d:],x[:,:-self.d] #is the flip
             
-            st=self.st_net(x1)
+            st=self.st_net[i](x1)
             s,t=st[:,(self.n_features-self.d):],st[:,:(self.n_features-self.d)]
 
             y1=x1
             y2=x2*torch.exp(s)+t
 
-            s_loss=torch.cat([s_loss,s.sum(dim=-1)],dim=-1)
+            s_loss=torch.cat([s_loss,s],dim=-1)
 
             x=torch.cat([y1,y2],-1)
         y=x
+
         s_loss=s_loss.sum(dim=-1)
 
-        gmm=self.prior.fit(y)
+        gmm=self.prior
+        gmm.fit(y)
+        
         log_likelihood=gmm.score_samples(y)
-
+        
         loss=-1*(s_loss+log_likelihood)
-
-        return y, gmm, loss 
+        
+        return y, gmm, loss.mean()
 
 
 
@@ -92,12 +96,11 @@ for i in train_enum:
     
     batch = torch.FloatTensor(noisy_moons)
     y,gmm,loss = model(batch)
-    # If the loss is lower than anything already encountered, consider that the "best model".
-    if loss.item() < min_loss:
-        bestmodel = model
+
+
     
     # Backpropagation.
     loss.backward()
     optimizer.step()
-    if i % 500 == 0:
-        print('Iter {}, loss is {:.3f}'.format(i, loss.item()))
+    
+    print('Iter {}, loss is {:.3f}'.format(i, loss.item()))
