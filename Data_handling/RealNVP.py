@@ -7,100 +7,89 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import os
+
 from gmm_torch import GaussianMixture
+from gmmflow import TorchGaussMixture
 
 # I will need to do batch normalisation
+# I will need to do batch normalisation
+
 
 class FlowGMM(nn.Module):
-    def __init__(self,layers,n_features,mixture_components,hidden_dims,d):
+    def __init__(self,layers,n_features,mixture_components,hidden_dims,d,means):
         super().__init__()
         self.layers=layers
-        
-        self.n_features=n_features
+        self.b1=torch.tensor([i for i in range(1,n_features+1)],requires_grad=False).le(d)
+        self.b2=torch.tensor([i for i in range(1,n_features+1)],requires_grad=False).ge(n_features-d+1)
+        self.D=n_features
         self.d=d
-        self.prior=GaussianMixture(n_components=mixture_components,n_features=self.n_features)
+        #self.prior=TorchGaussMixture(means=means)
+        self.prior=GaussianMixture(n_components=mixture_components,n_features=self.D,init_params='random')
 
-        self.st_net=nn.ModuleList([nn.Sequential(
+        self.s_net=nn.ModuleList([nn.Sequential(
             nn.Linear(self.d,hidden_dims[0]),
             nn.ReLU(),
             nn.Linear(hidden_dims[0],hidden_dims[1]),
             nn.ReLU(),
-            nn.Linear(hidden_dims[1],2*(self.n_features-self.d)) #d is the dimension of 1:d vector, 
+            nn.Linear(hidden_dims[1],(self.D-self.d)) #d is the dimension of 1:d vector, 
                             ) for i in range(layers)])
-
+        self.t_net=nn.ModuleList([nn.Sequential(
+            nn.Linear(self.d,hidden_dims[0]),
+            nn.ReLU(),
+            nn.Linear(hidden_dims[0],hidden_dims[1]),
+            nn.ReLU(),
+            nn.Linear(hidden_dims[1],(self.D-self.d)) #d is the dimension of 1:d vector, 
+                            ) for i in range(layers)])
+    
+    
     def forward(self,x):
-        s_loss=torch.empty_like(x[:,self.d:])
+        loss=0.0
+        det_s=0
         for i in range(self.layers):
-            
+            #paper recommends doing batch normalisation at each layer
+            n=nn.BatchNorm1d(self.D)
+            x=n(x)
+            #####################################################
+            #Switch the mask at each layer.
             if(i%2==0):
-                x1,x2=x[:,:self.d],x[:,self.d:]
+                b=self.b1
             else:
-                x1,x2=x[:,-self.d:],x[:,:-self.d] #is the flip
+                b=self.b2
+
+            x1d=x[:,b.nonzero()[:,0]]
+            xdD=x[:,(~b).nonzero()[:,0]]
+
+            #####################################################
+            # Coupling layer
+
+            y1d=x1d
+
+            s,t=self.s_net[i](x1d),self.t_net[i](x1d)
+
+            ydD=xdD*torch.exp(s)+t
             
-            st=self.st_net[i](x1)
-            s,t=st[:,(self.n_features-self.d):],st[:,:(self.n_features-self.d)]
+            #######
+            # Determinant of the transformation is sum of s terms
 
-            y1=x1
-            y2=x2*torch.exp(s)+t
-
-            s_loss=torch.cat([s_loss,s],dim=-1)
-
-            x=torch.cat([y1,y2],-1)
+            det_s+=s.sum(-1).mean() #each row is component of s, thats summed then summed over each value due to independence?
+            x=torch.cat([y1d,ydD],-1) #loop through to the next layer
+        
         y=x
-
-        s_loss=s_loss.sum(dim=-1)
-
+        #########################################
+        #loss log likelihood part
+        ###
+        #Fit GMM to image of f(x)
+        
         gmm=self.prior
         gmm.fit(y)
         
-        log_likelihood=gmm.score_samples(y)
+
+        log_likelihood=gmm.score_samples(y).mean()#gmm.score_samples(y).sum()#gmm.log_prob(y).mean()#
+        ## Loss is negative log likelihood
+        loss=-1*(det_s+log_likelihood)
         
-        loss=-1*(s_loss+log_likelihood)
-        
-        return y, gmm, loss.mean()
+        return y, gmm, loss, log_likelihood,det_s
 
 
 
-n_samples = 2000
-
-# Define distribution. 
-from sklearn import cluster, datasets, mixture
-from sklearn.preprocessing import StandardScaler
-noisy_moons = datasets.make_moons(n_samples=n_samples, noise=.05)
-X, y = noisy_moons
-X = StandardScaler().fit_transform(X)
-
-model = FlowGMM(layers=2,n_features=X.shape[-1],mixture_components=2,hidden_dims=[10,10],d=1)
-
-# Training hyperparameters.
-learning_rate = 1e-4
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-# Increase or decrease this if you wish.
-iters = 10000
-
-
-
-train_enum = range(iters - 1)
-
-# Initialise the minimum loss at infinity.
-min_loss = float('inf')
-
-# Iterate over the number of iterations.
-for i in train_enum:
-    # Sample from our "dataset". We artificially have infinitely many data points here.
-    noisy_moons = datasets.make_moons(n_samples=128, noise=.05)[0].astype(np.float32)
-    X = StandardScaler().fit_transform(X)
-    
-    optimizer.zero_grad()
-    
-    batch = torch.FloatTensor(noisy_moons)
-    y,gmm,loss = model(batch)
-
-
-    
-    # Backpropagation.
-    loss.backward()
-    optimizer.step()
-    
-    print('Iter {}, loss is {:.3f}'.format(i, loss.item()))
