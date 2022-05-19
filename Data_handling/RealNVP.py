@@ -19,13 +19,15 @@ from gmmflow import TorchGaussMixture
 class FlowGMM(nn.Module):
     def __init__(self,layers,n_features,mixture_components,hidden_dims,d,means):
         super().__init__()
+        
         self.layers=layers
         self.b1=torch.tensor([i for i in range(1,n_features+1)],requires_grad=False).le(d)
         self.b2=torch.tensor([i for i in range(1,n_features+1)],requires_grad=False).ge(n_features-d+1)
         self.D=n_features
         self.d=d
+        self.prior=distributions.MultivariateNormal(torch.zeros(n_features), torch.eye(n_features))
         #self.prior=TorchGaussMixture(means=means)
-        self.prior=GaussianMixture(n_components=mixture_components,n_features=self.D,init_params='random')
+        #self.prior=GaussianMixture(n_components=mixture_components,n_features=self.D,init_params='kmeans',covariance_type='diag')
 
         self.s_net=nn.ModuleList([nn.Sequential(
             nn.Linear(self.d,hidden_dims[0]),
@@ -44,6 +46,12 @@ class FlowGMM(nn.Module):
     
     
     def forward(self,x):
+        
+        labels=x[:,x.shape[-1]-1]
+        x=x[:,:x.shape[-1]-1]
+        
+
+
         loss=0.0
         det_s=0
         for i in range(self.layers):
@@ -82,10 +90,10 @@ class FlowGMM(nn.Module):
         #Fit GMM to image of f(x)
         
         gmm=self.prior
-        gmm.fit(y)
+        #gmm.fit(y)
         
-
-        log_likelihood=gmm.score_samples(y).mean()#gmm.score_samples(y).sum()#gmm.log_prob(y).mean()#
+        log_likelihood=gmm.log_prob(y).mean()
+        #log_likelihood=gmm.log_prob(y,labels).mean()#gmm.score_samples(y).sum()#gmm.log_prob(y).mean()#
         ## Loss is negative log likelihood
         loss=-1*(det_s+log_likelihood)
         
