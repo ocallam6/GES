@@ -316,4 +316,47 @@ class XDGMM(BaseEstimator):
             components[:,j]=components[:,j]/sum
         return components.transpose()
 
+    def final_prob(self, X,Xerr,R,prob_true,prob_false,true_index):
+        
+        X = np.asarray(X)
+        Xerr = np.asarray(Xerr)
+        n_samples, n_features = X.shape
+        # assume full covariances of data
+        assert Xerr.shape == (n_samples, n_features, n_features)
 
+        X = X[:, np.newaxis, :]
+
+
+
+        Xerr = Xerr[:, np.newaxis, :, :]
+        R=R[:,np.newaxis,:,:]
+        
+        RVRt=np.matmul(np.matmul(R[:],self.V[:]),R.transpose(0,1,3,2)[:])   #we dont do transpose as all of our matrices are diagonal
+        
+        Rmu=np.matmul(R,self.mu[np.newaxis,:,:,np.newaxis])
+        Rmu=Rmu.reshape(Rmu.shape[0:3])
+
+        T = RVRt+ Xerr
+
+        Tshape = T.shape
+        T = T.reshape([n_samples * self.n_components,
+                        n_features, n_features])
+        Tinv = np.array([linalg.inv(T[i])
+                            for i in range(T.shape[0])]).reshape(Tshape)
+        T = T.reshape(Tshape)
+
+
+        output=[]
+        components=np.array([[0.0]*self.n_components]*len(X)).transpose()
+
+        for j in range(0,len(X)):
+            sum=0
+            for i in range(0,self.n_components):
+                if i == true_index:
+                    components[i,j]=prob_true[j]*self.alpha[i]*multivariate_normal.pdf(X[j],Rmu[j,i,:],T[j,i,:,:])
+                    sum=sum+prob_true[j]*self.alpha[i]*multivariate_normal.pdf(X[j],Rmu[j,i,:],T[j,i,:,:])
+                if i != true_index:
+                    components[i,j]=prob_false[j]*self.alpha[i]*multivariate_normal.pdf(X[j],Rmu[j,i,:],T[j,i,:,:])
+                    sum=sum+prob_false[j]*self.alpha[i]*multivariate_normal.pdf(X[j],Rmu[j,i,:],T[j,i,:,:])
+            components[:,j]=components[:,j]/sum
+        return components.transpose()

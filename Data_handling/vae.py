@@ -98,7 +98,7 @@ BCE_loss = nn.BCELoss()
 def loss_function(x, x_hat, mean, log_var):
     reproduction_loss = nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
-    kldweight=0.1
+    kldweight=0.01
     return reproduction_loss + KLD*kldweight, KLD
 
 def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):

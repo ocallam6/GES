@@ -25,8 +25,8 @@ class FlowGMM(nn.Module):
         self.b2=torch.tensor([i for i in range(1,n_features+1)],requires_grad=False).ge(n_features-d+1)
         self.D=n_features
         self.d=d
-        self.prior=distributions.MultivariateNormal(torch.zeros(n_features), torch.eye(n_features))
-        #self.prior=TorchGaussMixture(means=means)
+        #self.prior=distributions.MultivariateNormal(torch.zeros(n_features), torch.eye(n_features))
+        self.prior=TorchGaussMixture(means=means)
         #self.prior=GaussianMixture(n_components=mixture_components,n_features=self.D,init_params='kmeans',covariance_type='diag')
 
         self.s_net=nn.ModuleList([nn.Sequential(
@@ -46,14 +46,15 @@ class FlowGMM(nn.Module):
     
     
     def forward(self,x):
-        
+        det_s=torch.zeros(len(x))
         labels=x[:,x.shape[-1]-1]
         x=x[:,:x.shape[-1]-1]
         
 
 
         loss=0.0
-        det_s=0
+        det_s=torch.zeros(len(x))
+
         for i in range(self.layers):
             #paper recommends doing batch normalisation at each layer
             n=nn.BatchNorm1d(self.D)
@@ -64,10 +65,11 @@ class FlowGMM(nn.Module):
                 b=self.b1
             else:
                 b=self.b2
-
+            
+            
             x1d=x[:,b.nonzero()[:,0]]
             xdD=x[:,(~b).nonzero()[:,0]]
-
+    
             #####################################################
             # Coupling layer
 
@@ -80,7 +82,7 @@ class FlowGMM(nn.Module):
             #######
             # Determinant of the transformation is sum of s terms
 
-            det_s+=s.sum(-1).mean() #each row is component of s, thats summed then summed over each value due to independence?
+            det_s+=s.sum(-1) #each row is component of s, thats summed then summed over each value due to independence?
             x=torch.cat([y1d,ydD],-1) #loop through to the next layer
         
         y=x
@@ -92,12 +94,12 @@ class FlowGMM(nn.Module):
         gmm=self.prior
         #gmm.fit(y)
         
-        log_likelihood=gmm.log_prob(y).mean()
+        log_likelihood=gmm.log_prob(y,labels)
         #log_likelihood=gmm.log_prob(y,labels).mean()#gmm.score_samples(y).sum()#gmm.log_prob(y).mean()#
         ## Loss is negative log likelihood
-        loss=-1*(det_s+log_likelihood)
+        loss=-1*(det_s+log_likelihood).mean()
         
-        return y, gmm, loss, log_likelihood,det_s
+        return y, gmm, loss,log_likelihood,det_s, log_likelihood.mean(),det_s.mean()
 
 
 
