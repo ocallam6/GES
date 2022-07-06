@@ -9,7 +9,7 @@ from astroquery.vizier import Vizier
 
 
 
-Gaia.MAIN_GAIA_TABLE = "gaiaedr3.gaia_source" # Select early Data Release 3
+Gaia.MAIN_GAIA_TABLE = "gaiadr3.gaia_source" # Select early Data Release 3
 Gaia.ROW_LIMIT=-1
 Vizier.ROW_LIMIT = -1
 
