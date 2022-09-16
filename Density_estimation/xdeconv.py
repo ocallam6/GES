@@ -82,11 +82,11 @@ class XDGMM(BaseEstimator):
 
         # initialize components via a few steps of GaussianMixture              #do an initial guess on the full data
         # this doesn't take into account errors, but is a fast first-guess
-        print('gmm')
+        
         gmm = GaussianMixture(self.n_components, max_iter=100,
                                 covariance_type='full',
                                 random_state=self.random_state).fit(X)
-        print('endgmm')
+        
         self.mu = gmm.means_
         self.alpha = gmm.weights_
         self.V = gmm.covariances_

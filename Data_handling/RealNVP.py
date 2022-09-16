@@ -9,15 +9,15 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
-from gmm_torch import GaussianMixture
-from gmmflow import TorchGaussMixture
+#from gmm_torch import GaussianMixture
+#from gmmflow import TorchGaussMixture
 
 # I will need to do batch normalisation
 # I will need to do batch normalisation
 
 
 class FlowGMM(nn.Module):
-    def __init__(self,layers,n_features,mixture_components,hidden_dims,d,means):
+    def __init__(self,layers,n_features,mixture_components,hidden_dims,d,means,prior):
         super().__init__()
         
         self.layers=layers
@@ -25,8 +25,9 @@ class FlowGMM(nn.Module):
         self.b2=torch.tensor([i for i in range(1,n_features+1)],requires_grad=False).ge(n_features-d+1)
         self.D=n_features
         self.d=d
+        self.prior=prior
         #self.prior=distributions.MultivariateNormal(torch.zeros(n_features), torch.eye(n_features))
-        self.prior=TorchGaussMixture(means=means)
+        #self.prior=TorchGaussMixture(means=means)
         #self.prior=GaussianMixture(n_components=mixture_components,n_features=self.D,init_params='kmeans',covariance_type='diag')
 
         self.s_net=nn.ModuleList([nn.Sequential(
@@ -94,7 +95,7 @@ class FlowGMM(nn.Module):
         gmm=self.prior
         #gmm.fit(y)
         
-        log_likelihood=gmm.log_prob(y,labels)
+        log_likelihood=gmm.log_prob(y)
         #log_likelihood=gmm.log_prob(y,labels).mean()#gmm.score_samples(y).sum()#gmm.log_prob(y).mean()#
         ## Loss is negative log likelihood
         loss=-1*(det_s+log_likelihood).mean()
