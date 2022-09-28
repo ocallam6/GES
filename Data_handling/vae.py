@@ -69,7 +69,7 @@ class Decoder(nn.Module): #likelihood function p(x given z)
     def forward(self,z):
         layer1=(self.relu(self.hidden1(z)))
         layer2=(self.relu(self.hidden2(layer1))) # z --> nn fully connected --> softplus activation --> hidden
-        x_recon=self.sigmoid(self.nn_out(layer2))  #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
+        x_recon=self.nn_out(layer2) #hidden --> nn fully connected --> sigmoid --> reconstructed spectrum
         return x_recon
 
 #Define the VAE now.
@@ -96,9 +96,9 @@ When doing the loss do we need our batch do be big enough so that taking the mea
 BCE_loss = nn.BCELoss()
 
 def loss_function(x, x_hat, mean, log_var):
-    reproduction_loss = nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
+    reproduction_loss = nn.functional.mse_loss(x_hat, x, reduction='sum')  #nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
-    kldweight=0.01
+    kldweight=1.0
     return reproduction_loss + KLD*kldweight, KLD
 
 def model_train(vae_spec,batch_size,optimizer,model,loss_function,epochs):
